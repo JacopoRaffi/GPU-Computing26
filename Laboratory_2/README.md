@@ -1,4 +1,4 @@
-# Laboratory 2
+# Laboratory 1
 
 Cluster usage, ssh/scp connection, SLURM usage and runtime measurement.
 
