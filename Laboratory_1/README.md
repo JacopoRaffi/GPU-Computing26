@@ -95,9 +95,11 @@ int main() {
 Since it require the OpenBLAS library, you need to load the module and link the library:
 
 ```
-[kaijie.fan@baldo ~]$  module load OpenBLAS/
-[kaijie.fan@baldo ~]$ gcc -o program program.c -L/opt/shares/openfoam/software/OpenBLAS/0.3.23-GCC-12.3.0/lib -I/opt/shares/openfoam/software/OpenBLAS/0.3.23-GCC-12.3.0/include/ -lopenblas
-[kaijie.fan@baldo ~]$
+[kaijie.fan@baldo ~]$ module load OpenBLAS/
+Loading OpenBLAS/0.3.27-GCC-13.3.0
+  Loading requirement: GCCcore/13.3.0 zlib/1.3.1-GCCcore-13.3.0 binutils/2.42-GCCcore-13.3.0 GCC/13.3.0
+[kaijie.fan@baldo ~]$ gcc -o gemm_test OpenBLAS_GEMM.c -L/opt/shares/openfoam/software/OpenBLAS/0.3.27-GCC-13.3.0/lib -I/opt/shares/openfoam/software/OpenBLAS/0.3.27-GCC-13.3.0/include/ -lopenblas
+[kaijie.fan@baldo ~]$ 
 ```
 
 Once you done, write a makefile to compile the source automatically.
