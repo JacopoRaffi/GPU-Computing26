@@ -9,16 +9,23 @@ Given the access pattern represented in the figure implement a kernel that uses 
 3. Set 10 iterations for each kernel execution, measure their GPU_time and effective bandwidth;
 4. Report the averages and standard deviation, compare the performance;
 
+Notes:
+1. Set the array size to 4096, the block size to 32, grid size to 16.
+2. Measure the time with Gettimeofday(), report the time in ms 
+3. Four warm-up cycles for the first kernel implementation 
+
+
 
 ## Exercise 6
 Find the best block and access pattern to perform an array element-wise addition kernel. Based on Exercise 5 (layout1 and layout 3), for each layout:
 1. Fix the grid size to 16, vary the array size, block size:
-    array size: 2^(12, 14, 16, 18, 20, 22)
-    block size: 32, 64, 128, 256, 512
+        array size: 2^(12, 14, 16, 18, 20, 22)
 
-2. Report the average time solution (ms), std and bandwidth (GB/s)
+       block size: 32, 64, 128, 256, 512
 
-3. Compare the performance, find the best block size and access pattern 
+3. Report the average time solution (ms), std and bandwidth (GB/s)
+
+4. Compare the performance, find the best block size and access pattern 
 
 
 
