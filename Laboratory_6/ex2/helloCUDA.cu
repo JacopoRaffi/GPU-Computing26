@@ -3,16 +3,19 @@
 #include <cuda_runtime.h>
 
 // Print device properties
+#define BLOCK_SIZE 256
+#define NUM_BLOCKS 8
+
 void printDevProp(cudaDeviceProp devProp)
 {
     printf("Major revision number:         %d\n",  devProp.major);
     printf("Minor revision number:         %d\n",  devProp.minor);
     printf("Name:                          %s\n",  devProp.name);
-    printf("  Memory Clock rate:           %.0f Mhz\n", devProp.memoryClockRate * 1e-3f);
+    // printf("  Memory Clock rate:           %.0f Mhz\n", devProp.memoryClockRate * 1e-3f);
 
     printf("  Memory Bus Width:            %d bit\n",devProp.memoryBusWidth);
 
-    printf("  Peak Memory Bandwidth:       %7.3f GB/s\n",2.0*devProp.memoryClockRate*(devProp.memoryBusWidth/8)/1.0e6);
+    // printf("  Peak Memory Bandwidth:       %7.3f GB/s\n",2.0*devProp.memoryClockRate*(devProp.memoryBusWidth/8)/1.0e6);
 
     printf("  Multiprocessors:             %3d\n",devProp.multiProcessorCount);
     printf("  Maximum number of threads per multiprocessor:  %d\n",devProp.maxThreadsPerMultiProcessor);
@@ -25,11 +28,7 @@ void printDevProp(cudaDeviceProp devProp)
     return;
 }
 __global__ void print_from_GPU(void){
-
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
-
+    printf("Hello World from Thread %d, Block %d\n", threadIdx.x, blockIdx.x);
 }
 
 int main()
@@ -53,10 +52,8 @@ int main()
         2) print helloworld from GPU, showing the threadID, and blockID
     */ 
 
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
-
+    printf("Hello World from Host\n");
+    print_from_GPU<<<NUM_BLOCKS, BLOCK_SIZE>>>();
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {

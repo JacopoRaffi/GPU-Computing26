@@ -23,11 +23,11 @@ void printDevProp(cudaDeviceProp devProp)
     printf("Major revision number:         %d\n",  devProp.major);
     printf("Minor revision number:         %d\n",  devProp.minor);
     printf("Name:                          %s\n",  devProp.name);
-    printf("  Memory Clock rate:           %.0f Mhz\n", devProp.memoryClockRate * 1e-3f);
+    // printf("  Memory Clock rate:           %.0f Mhz\n", devProp.memoryClockRate * 1e-3f);
 
     printf("  Memory Bus Width:            %d bit\n",devProp.memoryBusWidth);
 
-    printf("  Peak Memory Bandwidth:       %7.3f GB/s\n",2.0*devProp.memoryClockRate*(devProp.memoryBusWidth/8)/1.0e6);
+    // printf("  Peak Memory Bandwidth:       %7.3f GB/s\n",2.0*devProp.memoryClockRate*(devProp.memoryBusWidth/8)/1.0e6);
 
     printf("  Multiprocessors:             %3d\n",devProp.multiProcessorCount);
     printf("  Maximum number of threads per multiprocessor:  %d\n",devProp.maxThreadsPerMultiProcessor);
@@ -43,11 +43,10 @@ void printDevProp(cudaDeviceProp devProp)
 __global__ 
 void kernel_element_add(int n, dtype *a, dtype* b, dtype* c)
 {
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
-
-
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if(i < n) { 
+        c[i] = a[i] + b[i];
+    }
 }
 
 
@@ -73,16 +72,15 @@ int main(int argc, char *argv[])
     printf("====================================== Problem computations ======================================\n");
     // =========================================== Set-up the problem ============================================
 
-    if (argc < 2) {
-        printf("Usage: lab6_ex3 n\n");
-        return(1);
+    if (argc < 3) {
+        printf("Usage: %s <vec_len> <block_size>\n", argv[0]);
+        return -1;
     }
-    printf("argv[1] = %s\n", argv[1]);
 
     // ---------------- set-up the problem size -------------------
 
     int n = atoi(argv[1]), len = (1<<n), i;
-
+    int blk_size = atoi(argv[2]);
     printf("n = %d --> len = 2^(n) = %d\n", n, len);
     printf("dtype = %s\n", XSTR(dtype));
 
@@ -103,12 +101,10 @@ int main(int argc, char *argv[])
 
     // ------------------------gererate random float -----------------------
     
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
-
-
-    
+    for(i=0; i<len; i++){
+        a[i] = rand();
+        b[i] = rand();
+    }
     // ======================================== Running the computations on CPU =========================================
     
     TIMER_START;
@@ -135,28 +131,23 @@ int main(int argc, char *argv[])
 
 
     // ------------ Running the computation on GPU, measure time on host side --------------
-    
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
+    int grd_size = len/blk_size;
+    TIMER_START;
+    kernel_element_add<<<blk_size, grd_size>>>(len, dev_a, dev_b, dev_c);
+    cudaDeviceSynchronize();
+    TIMER_STOP;
+    gputime_host = TIMER_ELAPSED;
 
 
 
     // ----------- copy results from device to host ------------
-
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
-
-
+    cudaMemcpy(GPU_c, dev_c, len*sizeof(dtype), cudaMemcpyDeviceToHost);
 
     // ------------- Compare GPU and CPU solution --------------
 
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
-
-
+    for(i = 0; i < len; i++){
+        if(GPU_c[i] != CPU_c[i]) error += 1;
+    }
 
     // ------------------- reset gpu buffers ---------------------
     cudaMemset(dev_a, 0, len*sizeof(dtype));
@@ -167,26 +158,29 @@ int main(int argc, char *argv[])
     
     // ------------------- measure time with cuda event -------------------
    
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
 
+    cudaEventRecord(start);
+    kernel_element_add<<<blk_size, grd_size>>>(len, dev_a, dev_b, dev_c);
+    cudaEventRecord(stop);
 
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&gputime_event, start, stop);
 
     // ============================================ Print the results ============================================
 
     printf("================================== Times and results of my code ==================================\n");
     printf("Error between CPU and GPU is %lf\n", error);
-    printf("\nVector len = %d, CPU time = %5.3f\n", len, cputime);
-    printf("\nblk_size = %d, grd_size = %d, GPU time (gettimeofday): %5.3f sec\n", blk_size, grd_size, gputime_host);
-    printf("\nblk_size = %d, grd_size = %d, GPU time (CUDA Event): %5.3f ms\n", blk_size, grd_size,gputime_event);
+    printf("\nVector len = %d, CPU time = %f\n", len, cputime);
+    printf("\nblk_size = %d, grd_size = %d, GPU time (gettimeofday): %f sec\n", blk_size, grd_size, gputime_host);
+    printf("\nblk_size = %d, grd_size = %d, GPU time (CUDA Event): %f ms\n", blk_size, grd_size,gputime_event);
  
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA error: %s\n", cudaGetErrorString(err));
     }
-
-
     // ----------------- free GPU variable ---------------------
 
     cudaFree(dev_a);
