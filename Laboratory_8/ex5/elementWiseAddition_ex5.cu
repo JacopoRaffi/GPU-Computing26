@@ -36,11 +36,11 @@ void printDevProp(cudaDeviceProp devProp)
     printf("Major revision number:         %d\n",  devProp.major);
     printf("Minor revision number:         %d\n",  devProp.minor);
     printf("Name:                          %s\n",  devProp.name);
-    printf("  Memory Clock rate:           %.0f Mhz\n", devProp.memoryClockRate * 1e-3f);
+    // printf("  Memory Clock rate:           %.0f Mhz\n", devProp.memoryClockRate * 1e-3f);
 
     printf("  Memory Bus Width:            %d bit\n",devProp.memoryBusWidth);
 
-    printf("  Peak Memory Bandwidth:       %7.3f GB/s\n",2.0*devProp.memoryClockRate*(devProp.memoryBusWidth/8)/1.0e6);
+    // printf("  Peak Memory Bandwidth:       %7.3f GB/s\n",2.0*devProp.memoryClockRate*(devProp.memoryBusWidth/8)/1.0e6);
 
     printf("  Multiprocessors:             %3d\n",devProp.multiProcessorCount);
     printf("  Maximum number of threads per multiprocessor:  %d\n",devProp.maxThreadsPerMultiProcessor);
@@ -54,23 +54,25 @@ void printDevProp(cudaDeviceProp devProp)
 }
 
 float arithmetic_mean(float *v, int len) {
-
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
+  float sum = 0.0;
+  for(int i = 0; i < len; i++)
+    sum += v[i];
+  
+  return sum/(float)len;
 }
 
 float compute_std(float *arr, int n, float mean) {
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
+  float sum = 0;
+  for(int i = 0; i < n; i++){
+    sum += pow(arr[i]-mean, 2);
+  }
+
+  return sqrt(sum/(float)n);
 }
 
 
 __device__ uint get_smid(void) {
-
      uint ret;
-
      asm("mov.u32 %0, %smid;" : "=r"(ret) );
 
      return ret;
@@ -82,8 +84,6 @@ void example_kernel(int n, dtype *a, dtype* b, dtype* c)
 {
   if (threadIdx.x==0)
       printf("block %d runs on sm %d\n", blockIdx.x, get_smid());
-
-  // [ ... ]
 }
 
 
@@ -91,27 +91,67 @@ void example_kernel(int n, dtype *a, dtype* b, dtype* c)
 __global__
 void Problem_solution_layout1(int n, dtype *a, dtype* b, dtype* c)
 {
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int nthreads = blockDim.x * gridDim.x;
+    int tsize = (n%nthreads == 0) ? n/nthreads : (n/nthreads) + 1;
+
+    int access_index = tid;
+    for(int i = 0; i < tsize; i++){
+      if(access_index < n){
+        c[access_index] = a[access_index] + b[access_index]; 
+      }
+      access_index += nthreads;
+    }
 }
 
 __global__
 void Problem_solution_layout2(int n, dtype *a, dtype* b, dtype* c, int h)
 {
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int nthreads = blockDim.x * gridDim.x;
+    int tsize = (nthreads%n == 0) ? n/nthreads : n/nthreads + 1;
+
+    int access_index = tid;
+    int shifted;
+    for(int i = 0; i < tsize; i++){
+      if(access_index < n){
+        shifted = access_index + h;
+        shifted -= n*(shifted >= n);
+        c[access_index] = a[shifted] + b[shifted];
+        access_index += nthreads;
+      }
+    }
 }
 
 __global__
 void Problem_solution_layout3(int n, dtype *a, dtype* b, dtype* c)
 {
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int nthreads = blockDim.x * gridDim.x;
+    int tsize = (n%nthreads == 0) ? n/nthreads : n/nthreads + 1;
+
+    int access_index = tid*tsize;
+    for(int i = 0; i < tsize; i++){
+      if(access_index < n){
+        c[access_index] = a[access_index] + b[access_index];
+        access_index++;
+      }
+    }
 }
 
+__host__ void cpu_sum(int n, dtype* a, dtype* b, dtype* c, int offset=0){
+  for(int i = 0; i < n; i++) c[i] = a[(i+offset)%n] + b[(i+offset)%n];
+}
+
+__host__ int check(int n, dtype* cpu_arr, dtype* gpu_arr, int offset=0){
+  int num_errors = 0;
+  for(int i = 0; i < n; i++){
+    printf("%d    %d\n", cpu_arr[(i+offset)%n], gpu_arr[(i+offset)%n]);
+    num_errors += (cpu_arr[(i+offset)%n] != gpu_arr[(i+offset)%n]);
+  }
+
+  return num_errors;
+}
 
 int main(int argc, char *argv[]) {
 
@@ -121,14 +161,14 @@ int main(int argc, char *argv[]) {
   cudaError_t error_id = cudaGetDeviceCount(&deviceCount);
 
   int dev, SM_num;
-  for (dev = 0; dev < deviceCount; ++dev) {
-    cudaSetDevice(dev);
-    cudaDeviceProp deviceProp;
-    cudaGetDeviceProperties(&deviceProp, dev);
-    printDevProp(deviceProp);
-    SM_num = deviceProp.multiProcessorCount;
+  // for (dev = 0; dev < deviceCount; ++dev) {
+  //   cudaSetDevice(dev);
+  //   cudaDeviceProp deviceProp;
+  //   cudaGetDeviceProperties(&deviceProp, dev);
+  //   printDevProp(deviceProp);
+  //   SM_num = deviceProp.multiProcessorCount;
 
-  }
+  // }
 
 
   printf("====================================== Problem computations ======================================\n");
@@ -189,13 +229,10 @@ int main(int argc, char *argv[]) {
 
   // ---------------- computation on CPU -------------------
   // 1) Write an vector addition function on the CPU side, and measure its CPU_time
-    
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
-
-
-
+  TIMER_START;
+  cpu_sum(len, a, b, CPU_c);
+  TIMER_STOP;
+  cputime = TIMER_ELAPSED;
 
   // ---------------- allocating GPU vectors -------------------
   dtype *dev_a, *dev_b, *dev_c;
@@ -217,23 +254,30 @@ int main(int argc, char *argv[]) {
     // Layout1 implementation: Coalesced access, including the following three steps
   
   // Step1: ------------ computation solution with Layout 1 -----------
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  for(int i = -WARMUP; i < NITER; i++){
+    cudaEventRecord(start);
+    Problem_solution_layout1<<<block_size, grid_size>>>(len, dev_a, dev_b, dev_c);
+    cudaEventRecord(stop);
 
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&gputime_iter, start, stop);
+    if(i >= 0) gputime_layout1[i] = gputime_iter;
+  }
 
   
   // Step2: ----------- copy results from device to host ------------
 
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
+  cudaMemcpy(GPU_c, dev_c, len*sizeof(dtype), cudaMemcpyDeviceToHost);
 
   // Step3: ------------- Compare GPU and CPU solution, Report the time/std/bandwidth --------------
 
-    /* |========================================| */
-    /* |           Put here your code           | */
-    /* |========================================| */
+  errors[0] += check(len, GPU_c, CPU_c);
+  gputimes[0] = arithmetic_mean(gputime_layout1, NITER);
+  std[0] = compute_std(gputime_layout1, NITER, gputimes[0]);
+  bandwidth[0] = (len * 3.0 * sizeof(dtype)) / (gputimes[0] * 1e6);
 
 
   // ------------------- reset gpu buffers ---------------------
@@ -246,24 +290,32 @@ int main(int argc, char *argv[]) {
 
   // Layout2 implementation: Coalesced access + offset,
 
-  // Step1: ------------ computation solution with Layout 2 -----------
+  // Step1: ------------ computation solution with Layout 2 ----------
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  int offset = 4;  
+  cpu_sum(len, a, b, CPU_c, offset);
+  for(int i = -WARMUP; i < NITER; i++){
+    cudaEventRecord(start);
+    Problem_solution_layout2<<<block_size, grid_size>>>(len, dev_a, dev_b, dev_c, offset);
+    cudaEventRecord(stop);
 
-  /* |========================================| */
-  /* |           Put here your code           | */
-  /* |========================================| */
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&gputime_iter, start, stop);
+    if(i >= 0) gputime_layout2[i] = gputime_iter;
+  }
 
 
   // Step2: ----------- copy results from device to host ------------
 
-  /* |========================================| */
-  /* |           Put here your code           | */
-  /* |========================================| */
+  cudaMemcpy(GPU_c, dev_c, len*sizeof(dtype), cudaMemcpyDeviceToHost);
 
   // Step3: ------------- Compare GPU and CPU solution, Report the time/std/bandwidth --------------
 
-  /* |========================================| */
-  /* |           Put here your code           | */
-  /* |========================================| */
+  errors[1] += check(len, GPU_c, CPU_c, offset);
+  gputimes[1] = arithmetic_mean(gputime_layout2, NITER);
+  std[1] = compute_std(gputime_layout2, NITER, gputimes[1]);
+  bandwidth[1] = (len * 3.0 * sizeof(dtype)) / (gputimes[1] * 1e6);
 
 
     // ------------------- reset gpu buffers ---------------------
@@ -277,23 +329,31 @@ int main(int argc, char *argv[]) {
    // Layout3 implementation: Stride access,
 
   // Step1: ------------ computation solution with Layout 3 -----------
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  cpu_sum(len, a, b, CPU_c);
+  for(int i = -WARMUP; i < NITER; i++){
+    cudaEventRecord(start);
+    Problem_solution_layout3<<<block_size, grid_size>>>(len, dev_a, dev_b, dev_c);
+    cudaEventRecord(stop);
 
-  /* |========================================| */
-  /* |           Put here your code           | */
-  /* |========================================| */
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&gputime_iter, start, stop);
+    if(i >= 0) gputime_layout3[i] = gputime_iter;
+  }
+  
 
 
   // Step2: ----------- copy results from device to host ------------
 
-  /* |========================================| */
-  /* |           Put here your code           | */
-  /* |========================================| */
+  cudaMemcpy(GPU_c, dev_c, len*sizeof(dtype), cudaMemcpyDeviceToHost);
 
   // Step3: ------------- Compare GPU and CPU solution, Report the time/std/bandwidth --------------
 
-  /* |========================================| */
-  /* |           Put here your code           | */
-  /* |========================================| */
+  errors[2] += check(len, GPU_c, CPU_c);
+  gputimes[2] = arithmetic_mean(gputime_layout3, NITER);
+  std[2] = compute_std(gputime_layout3, NITER, gputimes[2]);
+  bandwidth[2] = (len * 3.0 * sizeof(dtype)) / (gputimes[2] * 1e6);
 
 
 // ============================================ Print the results ============================================
